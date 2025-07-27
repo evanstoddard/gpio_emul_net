@@ -1,0 +1,9 @@
+menu "Emulated GPIO Driver"
+
+config GPIO_EMUL_NET
+    bool "Emulated GPIO over Network Socket"
+    depends on GPIO && BOARD_NATIVE_SIM
+    help
+      Enable the GPIO emulated driver for native_sim target.
+
+endmenu
