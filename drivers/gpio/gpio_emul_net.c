@@ -21,11 +21,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include <gpio_emul_net/gpio_emul_net_protocol.h>
+#include <gpio_emul_net/gpio_emul_net_protocol_handler.h>
 
 /*****************************************************************************
  * Definitions
@@ -34,6 +36,8 @@
 LOG_MODULE_REGISTER(gpio_emul_net, CONFIG_GPIO_LOG_LEVEL);
 
 #define GPIO_EMUL_DATA(ptr) ((struct gpio_emul_net_data *)ptr)
+
+#define GPIO_EMUL_CONFIG(ptr) ((struct gpio_emul_net_config *)ptr)
 
 #define GPIO_EMUL_NET_THREAD_PRIORITY (1U)
 
@@ -56,6 +60,8 @@ struct gpio_emul_net_data {
   struct sockaddr_un server_addr;
 
   const struct device *parent;
+
+  uint32_t num_gpios;
 };
 
 struct gpio_emul_net_config {
@@ -96,6 +102,52 @@ static int prv_setup_server_socket(const struct device *dev) {
 /**
  * @brief [TODO:description]
  *
+ * @param dev [TODO:parameter]
+ * @param pollfd [TODO:parameter]
+ * @return [TODO:return]
+ */
+static int prv_handle_server_event(const struct device *dev,
+                                   const struct pollfd *pollfd) {
+  struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
+
+  if (pollfd->revents & POLLPRI || pollfd->revents & POLLHUP) {
+    return -ECONNABORTED;
+  }
+
+  return 0;
+}
+
+/**
+ * @brief [TODO:description]
+ *
+ * @param dev [TODO:parameter]
+ */
+static void prv_poll_server(const struct device *dev) {
+  struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
+
+  struct pollfd server_pollfd = {0};
+  server_pollfd.fd = data->server_fd;
+  server_pollfd.events = POLLIN | POLLPRI | POLLHUP;
+
+  while (true) {
+    int ret = poll(&server_pollfd, 1, -1);
+
+    if (ret < 0) {
+      LOG_ERR("Server poll error: %d", ret);
+      return;
+    }
+
+    ret = prv_handle_server_event(dev, &server_pollfd);
+
+    if (ret < 0) {
+      return;
+    }
+  }
+}
+
+/**
+ * @brief [TODO:description]
+ *
  * @param arg1 [TODO:parameter]
  * @param arg2 [TODO:parameter]
  * @param arg3 [TODO:parameter]
@@ -128,16 +180,13 @@ static void prv_thread_handler(void *arg1, void *arg2, void *arg3) {
 
       continue;
     } else {
-      LOG_INF("Successfully connected to GPIO server socket.");
+      LOG_INF("Connected to server.");
 
-      gpio_emul_net_ident_t msg = {0};
-      msg.header.payload_len_bytes = sizeof(gpio_emul_net_ident_payload_t);
-      msg.payload.num_gpios = 69;
+      prv_poll_server(dev);
 
-      send(data->server_fd, &msg, sizeof(msg), 0);
+      close(data->server_fd);
+      LOG_WRN("Disconnected from server.");
     }
-
-    k_sleep(K_FOREVER);
   }
 }
 
@@ -161,6 +210,7 @@ static inline uint32_t prv_num_gpios_from_bitmask(uint32_t bitmask) {
 static int gpio_emul_net_init(const struct device *dev) {
 
   struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
+  struct gpio_emul_net_config *config = GPIO_EMUL_CONFIG(dev->config);
 
   memset(&data->server_addr, 0, sizeof(struct sockaddr_un));
 
@@ -173,6 +223,7 @@ static int gpio_emul_net_init(const struct device *dev) {
       (void *)dev, NULL, NULL, GPIO_EMUL_NET_THREAD_PRIORITY, 0, K_NO_WAIT);
 
   const struct gpio_driver_config *parent_config = data->parent->config;
+  data->num_gpios = prv_num_gpios_from_bitmask(parent_config->port_pin_mask);
 
   return 0;
 }
