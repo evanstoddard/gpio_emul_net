@@ -39,6 +39,7 @@ typedef int (*gpio_emul_net_write_func_t)(const void *data, size_t size,
 typedef struct gpio_emul_net_callbacks_t {
   void (*on_ident)(gpio_emul_net_ident_payload_t *payload);
   void (*on_pin_flags)(gpio_emul_net_pin_flags_payload_t *payload);
+  void (*on_pin_values)(gpio_emul_net_proto_pin_values_payload_t *payload);
 } gpio_emul_net_callbacks_t;
 
 /*****************************************************************************
@@ -80,6 +81,15 @@ int gpio_emul_net_write_ident_message(uint32_t num_gpios);
  * @return [TODO:return]
  */
 int gpio_net_emul_write_gpio_flags_message(uint32_t pin_number, uint32_t flags);
+
+/**
+ * @brief [TODO:description]
+ *
+ * @param pin_mask [TODO:parameter]
+ * @param values [TODO:parameter]
+ * @return [TODO:return]
+ */
+int gpio_emul_net_write_pin_values_message(uint32_t pin_mask, uint32_t values);
 
 #ifdef __cplusplus
 }

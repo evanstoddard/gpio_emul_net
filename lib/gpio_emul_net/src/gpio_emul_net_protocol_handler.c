@@ -36,7 +36,8 @@ typedef int (*gpio_emul_net_handler_t)(
  * @param header [TODO:parameter]
  * @return [TODO:return]
  */
-int prv_handle_ident_msg(int fd, const gpio_emul_net_proto_header_t *header);
+static int prv_handle_ident_msg(int fd,
+                                const gpio_emul_net_proto_header_t *header);
 
 /**
  * @brief [TODO:description]
@@ -45,8 +46,18 @@ int prv_handle_ident_msg(int fd, const gpio_emul_net_proto_header_t *header);
  * @param header [TODO:parameter]
  * @return [TODO:return]
  */
-int prv_handle_pin_flags_msg(int fd,
-                             const gpio_emul_net_proto_header_t *header);
+static int prv_handle_pin_flags_msg(int fd,
+                                    const gpio_emul_net_proto_header_t *header);
+
+/**
+ * @brief [TODO:description]
+ *
+ * @param fd [TODO:parameter]
+ * @param header [TODO:parameter]
+ * @return [TODO:return]
+ */
+static int
+prv_handle_pin_values_msg(int fd, const gpio_emul_net_proto_header_t *header);
 
 /*****************************************************************************
  * Variables
@@ -67,6 +78,7 @@ static struct {
 static gpio_emul_net_handler_t prv_handlers[GPIO_EMUL_PROTO_NUM_IDS] = {
     [GPIO_EMUL_PROTO_MSG_IDENT] = prv_handle_ident_msg,
     [GPIO_EMUL_PROTO_MSG_PIN_FLAGS] = prv_handle_pin_flags_msg,
+    [GPIO_EMUL_PROTO_MSG_PIN_VALUES] = prv_handle_pin_values_msg,
 };
 
 /*****************************************************************************
@@ -153,11 +165,21 @@ int gpio_net_emul_write_gpio_flags_message(uint32_t pin_number,
   return prv_write(&msg, sizeof(msg));
 }
 
+int gpio_emul_net_write_pin_values_message(uint32_t pin_mask, uint32_t values) {
+  gpio_emul_net_proto_pin_values_t msg = {0};
+  gpio_emul_net_proto_pin_values_init(&msg);
+
+  msg.payload.pin_mask = pin_mask;
+  msg.payload.pin_values = values;
+
+  return prv_write(&msg, sizeof(msg));
+}
 /*****************************************************************************
  * Protocol Handler
  *****************************************************************************/
 
-int prv_handle_ident_msg(int fd, const gpio_emul_net_proto_header_t *header) {
+static int prv_handle_ident_msg(int fd,
+                                const gpio_emul_net_proto_header_t *header) {
   gpio_emul_net_ident_payload_t payload = {0};
 
   if (header->payload_len_bytes != sizeof(payload)) {
@@ -186,8 +208,8 @@ int prv_handle_ident_msg(int fd, const gpio_emul_net_proto_header_t *header) {
   return 0;
 }
 
-int prv_handle_pin_flags_msg(int fd,
-                             const gpio_emul_net_proto_header_t *header) {
+static int
+prv_handle_pin_flags_msg(int fd, const gpio_emul_net_proto_header_t *header) {
   gpio_emul_net_pin_flags_payload_t payload = {0};
 
   if (header->payload_len_bytes != sizeof(payload)) {
@@ -211,6 +233,36 @@ int prv_handle_pin_flags_msg(int fd,
   // TODO: Handle callback
   if (prv_inst.callbacks.on_pin_flags != NULL) {
     prv_inst.callbacks.on_pin_flags(&payload);
+  }
+
+  return 0;
+}
+
+static int
+prv_handle_pin_values_msg(int fd, const gpio_emul_net_proto_header_t *header) {
+  gpio_emul_net_proto_pin_values_payload_t payload = {0};
+
+  if (header->payload_len_bytes != sizeof(payload)) {
+    return -EMSGSIZE;
+  }
+
+  ssize_t ret = read(fd, &payload, sizeof(payload));
+
+  if (ret < 0) {
+    return ret;
+  }
+
+  if (ret == 0) {
+    return -ECONNABORTED;
+  }
+
+  if (ret != header->payload_len_bytes) {
+    return -EBADMSG;
+  }
+
+  // TODO: Handle callback
+  if (prv_inst.callbacks.on_pin_values != NULL) {
+    prv_inst.callbacks.on_pin_values(&payload);
   }
 
   return 0;

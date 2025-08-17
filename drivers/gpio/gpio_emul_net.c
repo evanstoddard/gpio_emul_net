@@ -119,8 +119,6 @@ static int prv_socket_write_function(const void *data, size_t size, void *ctx) {
 static void prv_write_pin_flags(const struct device *dev) {
   struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
 
-  LOG_INF("Start write pin flags.");
-
   for (uint32_t i = 0; i < data->num_gpios; i++) {
     gpio_flags_t flags = 0;
 
@@ -136,6 +134,30 @@ static void prv_write_pin_flags(const struct device *dev) {
       LOG_ERR("Failed to write pin flags message: %d", ret);
       break;
     }
+  }
+}
+
+/**
+ * @brief [TODO:description]
+ *
+ * @param dev [TODO:parameter]
+ */
+static void prv_write_pin_values(const struct device *dev) {
+  struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
+
+  uint32_t values = 0;
+
+  int ret = gpio_emul_output_get_masked(data->parent, UINT32_MAX, &values);
+
+  if (ret < 0) {
+    LOG_ERR("Failed to get GPIO values: %d", ret);
+    return;
+  }
+
+  ret = gpio_emul_net_write_pin_values_message(UINT32_MAX, values);
+
+  if (ret < 0) {
+    LOG_ERR("Failed to write pin values: %d", ret);
   }
 }
 
@@ -249,6 +271,7 @@ static void prv_thread_handler(void *arg1, void *arg2, void *arg3) {
       }
 
       prv_write_pin_flags(dev);
+      prv_write_pin_values(dev);
 
       prv_poll_server(dev);
 
