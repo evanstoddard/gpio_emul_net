@@ -84,11 +84,17 @@ typedef struct __attribute__((__packed__)) gpio_emul_net_proto_header_t {
  */
 typedef enum {
   GPIO_EMUL_PROTO_MSG_IDENT,
+  GPIO_EMUL_PROTO_MSG_PIN_FLAGS,
   GPIO_EMUL_PROTO_NUM_IDS,
 } gpio_emul_proto_msg_type_t;
 
 GPIO_EMUL_MSG_DEFINE(gpio_emul_net_ident, GPIO_EMUL_PROTO_MSG_IDENT,
                      { uint32_t num_gpios; });
+
+GPIO_EMUL_MSG_DEFINE(gpio_emul_net_pin_flags, GPIO_EMUL_PROTO_MSG_PIN_FLAGS, {
+  uint32_t pin_number;
+  uint32_t flags;
+});
 
 #ifdef __cplusplus
 }

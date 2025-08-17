@@ -81,6 +81,65 @@ static const char *prv_default_path = "/tmp/gpio_emu_sock";
 /**
  * @brief [TODO:description]
  *
+ * @param data [TODO:parameter]
+ * @param size [TODO:parameter]
+ * @param ctx [TODO:parameter]
+ * @return [TODO:return]
+ */
+static int prv_socket_write_function(const void *data, size_t size, void *ctx) {
+  const struct device *dev = (const struct device *)ctx;
+  struct gpio_emul_net_data *inst_data = GPIO_EMUL_DATA(dev->data);
+
+  if (inst_data->server_fd < 0) {
+    return -ENODEV;
+  }
+
+  ssize_t written = write(inst_data->server_fd, data, size);
+
+  if (written < 0) {
+    return -errno;
+  }
+
+  if (written < 0) {
+    return -ECONNABORTED;
+  }
+
+  if (written != size) {
+    return -EBADMSG;
+  }
+
+  return 0;
+}
+
+/**
+ * @brief [TODO:description]
+ *
+ * @param dev [TODO:parameter]
+ */
+static void prv_write_pin_flags(const struct device *dev) {
+  struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
+
+  for (uint32_t i = 0; i < data->num_gpios; i++) {
+    gpio_flags_t flags = 0;
+
+    int ret = gpio_emul_flags_get(data->parent, i, &flags);
+
+    if (ret < 0) {
+      LOG_ERR("Failed to get pin flags: %d", ret);
+      break;
+    }
+
+    ret = gpio_net_emul_write_gpio_flags_message(i, flags);
+    if (ret < 0) {
+      LOG_ERR("Failed to write pin flags message: %d", ret);
+      break;
+    }
+  }
+}
+
+/**
+ * @brief [TODO:description]
+ *
  * @param dev [TODO:parameter]
  * @return [TODO:return]
  */
@@ -108,7 +167,6 @@ static int prv_setup_server_socket(const struct device *dev) {
  */
 static int prv_handle_server_event(const struct device *dev,
                                    const struct pollfd *pollfd) {
-  struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
 
   if (pollfd->revents & POLLPRI || pollfd->revents & POLLHUP) {
     return -ECONNABORTED;
@@ -182,9 +240,18 @@ static void prv_thread_handler(void *arg1, void *arg2, void *arg3) {
     } else {
       LOG_INF("Connected to server.");
 
+      ret = gpio_emul_net_write_ident_message(data->num_gpios);
+
+      if (ret < 0) {
+        LOG_ERR("Failed to write identify message: %d", ret);
+      }
+
+      prv_write_pin_flags(dev);
+
       prv_poll_server(dev);
 
       close(data->server_fd);
+      data->server_fd = -1;
       LOG_WRN("Disconnected from server.");
     }
   }
@@ -210,13 +277,17 @@ static inline uint32_t prv_num_gpios_from_bitmask(uint32_t bitmask) {
 static int gpio_emul_net_init(const struct device *dev) {
 
   struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
-  struct gpio_emul_net_config *config = GPIO_EMUL_CONFIG(dev->config);
 
   memset(&data->server_addr, 0, sizeof(struct sockaddr_un));
 
   data->server_addr.sun_family = AF_UNIX;
   strncpy(data->server_addr.sun_path, prv_default_path,
           sizeof(data->server_addr.sun_path) - 1);
+
+  gpio_emul_net_set_write_function(
+      prv_socket_write_function,
+      (void *)(void *)(void *)(void *)(void *)(void *)(void *)(void *)(void *)
+          dev);
 
   data->thread_id = k_thread_create(
       &data->thread, data->stack, data->stack_size, prv_thread_handler,
