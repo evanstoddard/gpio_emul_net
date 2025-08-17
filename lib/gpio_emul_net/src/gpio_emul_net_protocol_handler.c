@@ -150,6 +150,7 @@ int gpio_net_emul_write_gpio_flags_message(uint32_t pin_number,
 
   msg.payload.pin_number = pin_number;
   msg.payload.flags = flags;
+  return prv_write(&msg, sizeof(msg));
 }
 
 /*****************************************************************************

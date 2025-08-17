@@ -119,6 +119,8 @@ static int prv_socket_write_function(const void *data, size_t size, void *ctx) {
 static void prv_write_pin_flags(const struct device *dev) {
   struct gpio_emul_net_data *data = GPIO_EMUL_DATA(dev->data);
 
+  LOG_INF("Start write pin flags.");
+
   for (uint32_t i = 0; i < data->num_gpios; i++) {
     gpio_flags_t flags = 0;
 
